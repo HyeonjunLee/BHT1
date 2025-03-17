@@ -220,14 +220,14 @@ rho_air = 1.2                 # Air density (kg/m³)
 c_p_air = 1000                # Air specific heat (J/(kg·K))
 T_air_initial = 2500          # Initial internal air temperature (°C)
 T_fire = 2500               # Temperature immediately after firing (°C)
-total_time = 300              # Total simulation time (s)
-dt = 0.001                  # Time step (s)
+total_time = 30              # Total simulation time (s)
+dt = 0.00001                  # Time step (s)
 # For non-uniform grid: choose N_coat sufficiently high to resolve 0.1 mm coating
-N_coat = 10                 # e.g., 10 points in coating region
-N_steel = 140               # e.g., 140 points in steel region
+N_coat = 4                 # e.g., 10 points in coating region
+N_steel = 20               # e.g., 140 points in steel region
 
 # Firing events (in seconds)
-firing_events = [60, 120, 180]
+firing_events = [7.5, 15]
 
 # -------------------- Run Simulation --------------------
 r_shell, T_record, times, T_air_record, r1_val, inner_d_val, r_chrome_out = \
