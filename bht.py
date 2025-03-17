@@ -2,166 +2,271 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-# Temperature-dependent thermal conductivity (W/m·K)
-def thermal_conductivity(T):
-    # Linear approximation: at 20°C, k = 80; at 1000°C, k ≈ 60 W/m·K
-    return 80 - 0.0204 * (T - 20)
-
-# Temperature-dependent convective heat transfer coefficient (W/m²·K)
-def convective_heat_transfer_coefficient(T_surface, T_air):
-    # Simple model: base value 25 W/m²·K plus a term proportional to the temperature difference
-    return 25 + 0.01 * abs(T_surface - T_air)
-
-def transient_heat_conduction_cylindrical_convective_inner_variable(T_outside, inner_diameter_mm, thickness_mm,
-                                                                    rho, c_p, rho_air, c_p_air,
-                                                                    T_air_initial,
-                                                                    total_time, dt, N):
+# ---------------------- Dittus–Boelter Correlation Function ----------------------
+def dittus_boelter_h(V, D, T_air, mode='cooling'):
     """
-    Transient heat conduction in a cylindrical shell with variable thermal conductivity and convective heat transfer coefficient.
-    The inner wall exchanges energy with internal air via convection and conduction, while the outer wall is fixed at T_outside.
+    Compute the convective heat transfer coefficient (h) for air inside a tube 
+    using the Dittus–Boelter correlation.
     
     Parameters:
-      T_outside: Ambient temperature at the outer wall (°C)
-      inner_diameter_mm: Inner wall diameter (mm)
-      thickness_mm: Shell thickness (mm)
-      rho: Density of the shell material (kg/m³)
-      c_p: Specific heat capacity of the shell material (J/(kg·K))
-      rho_air: Density of the internal air (kg/m³)
-      c_p_air: Specific heat capacity of the internal air (J/(kg·K))
-      T_air_initial: Initial temperature of the internal air (°C)
+      V : float
+         Flow velocity in m/s.
+      D : float
+         Characteristic diameter in m.
+      T_air : float
+         Air temperature in Kelvin.
+      mode : str
+         'cooling' (n = 0.3) or 'heating' (n = 0.4); here we assume cooling.
+    
+    Returns:
+      h in W/(m²·K)
+    """
+    rho = 1.2       # kg/m³
+    mu = 1.8e-5     # Pa·s
+    k_air = 0.026   # W/m·K
+    cp_air = 1000   # J/(kg·K)
+    Re = (rho * V * D) / mu
+    Pr = (cp_air * mu) / k_air
+    n = 0.3 if mode=='cooling' else 0.4
+    Nu = 0.023 * (Re ** 0.8) * (Pr ** n)
+    h = (Nu * k_air) / D
+    return h
+
+# ---------------------- Temperature-dependent Material Properties ----------------------
+def thermal_conductivity_chrome(T):
+    # T in °C; linear: 93 W/m·K at 20°C, 85 W/m·K at 1000°C
+    return 93 - 0.008163 * (T - 20)
+
+def thermal_conductivity_steel(T):
+    # T in °C; linear: 80 W/m·K at 20°C, 70 W/m·K at 1000°C
+    return 80 - 0.010204 * (T - 20)
+
+def specific_heat_chrome(T):
+    # T in °C; linear: 450 J/(kg·K) at 20°C, 500 J/(kg·K) at 1000°C
+    return 450 + 0.05102 * (T - 20)
+
+def specific_heat_steel(T):
+    # T in °C; linear: 450 J/(kg·K) at 20°C, 520 J/(kg·K) at 1000°C
+    return 450 + 0.07143 * (T - 20)
+
+# ---------------------- Helper: Material properties based on radius ----------------------
+def get_material_props(T, r_val, r_chrome_out, include_coating):
+    """
+    Return (k, rho, cp) for a given temperature T and radial location r_val.
+    """
+    if include_coating and (r_val <= r_chrome_out):
+        return thermal_conductivity_chrome(T), 7190.0, specific_heat_chrome(T)
+    else:
+        return thermal_conductivity_steel(T), 7850.0, specific_heat_steel(T)
+
+# ---------------------- Grid Generation (Non-uniform) ----------------------
+def generate_nonuniform_grid(r1, r_chrome_out, r2, N_coat=10, N_steel=140):
+    """
+    Generate a non-uniform grid from r1 to r2.
+    In the coating region [r1, r_chrome_out], use N_coat points (uniformly spaced).
+    In the steel region [r_chrome_out, r2], use N_steel points (uniformly spaced).
+    Returns the concatenated grid (with r_chrome_out not duplicated).
+    """
+    r_coat = np.linspace(r1, r_chrome_out, N_coat)
+    r_steel = np.linspace(r_chrome_out, r2, N_steel)
+    # Avoid duplicate at the interface
+    r_full = np.concatenate([r_coat, r_steel[1:]])
+    return r_full
+
+# ---------------------- Transient Simulation with Non-uniform Grid ----------------------
+def transient_heat_conduction_nonuniform_with_firing(T_outside, inner_diameter_mm, steel_thickness_mm, d_chrome_mm,
+                                                     V, rho_air, c_p_air, T_air_initial,
+                                                     total_time, dt, N_coat, N_steel,
+                                                     firing_events, T_fire, include_coating=True):
+    """
+    Transient heat conduction simulation using a non-uniform radial grid.
+    The inner boundary has convection with the internal air (using Dittus–Boelter for h).
+    Firing events reset the internal air temperature to T_fire.
+    
+    Parameters:
+      T_outside: Ambient temperature at outer wall (°C)
+      inner_diameter_mm: Inner diameter (mm)
+      steel_thickness_mm: Steel thickness (mm)
+      d_chrome_mm: Chrome coating thickness (mm); ignored if include_coating is False.
+      V: Internal air flow velocity (m/s)
+      rho_air, c_p_air: Density and specific heat of the air.
+      T_air_initial: Initial internal air temperature (°C)
       total_time: Total simulation time (s)
       dt: Time step (s)
-      N: Number of grid points in the radial direction
-      
+      N_coat: Number of grid points in coating region.
+      N_steel: Number of grid points in steel region.
+      firing_events: List of firing event times (s).
+      T_fire: Internal air temperature after firing (°C)
+      include_coating: If True, include chrome coating.
+    
     Returns:
-      r: Radial coordinate array (m)
-      T_record: Recorded temperature distribution in the shell (°C), shape = (num_snapshots, N)
+      r: Non-uniform radial grid (m) from r1 to r2.
+      T_record: Temperature distribution in shell at snapshot times, shape=(num_snapshots, N).
       times: Snapshot times (s)
-      T_air_record: Internal air temperature evolution (°C)
+      T_air_record: Internal air temperature evolution (°C) at snapshot times.
+      r1: Inner radius (m) (start of shell).
+      inner_d: Inner diameter (m) (used for convection calculation).
+      r_chrome_out: Interface between chrome and steel (m).
     """
-    # Convert mm to m
-    inner_diameter = inner_diameter_mm / 1000.0
-    thickness = thickness_mm / 1000.0
+    # Geometry in m
+    inner_d = inner_diameter_mm / 1000.0
+    r1 = inner_d / 2.0
+    if include_coating:
+        d_chrome = d_chrome_mm / 1000.0
+    else:
+        d_chrome = 0.0
+    r_chrome_out = r1 + d_chrome
+    steel_thickness = steel_thickness_mm / 1000.0
+    r2 = r_chrome_out + steel_thickness
 
-    r1 = inner_diameter / 2.0  # inner radius
-    r2 = r1 + thickness        # outer radius
-
-    # Create uniform radial grid from r1 to r2
-    r = np.linspace(r1, r2, N)
-    dr = r[1] - r[0]
-
-    # Initial conditions
-    T = np.ones(N) * T_outside
-    T_air = T_air_initial
-
-    # Stability estimate (using approximate maximum k)
-    k_max = thermal_conductivity(T_air_initial)
-    alpha_max = k_max / (rho * c_p)
-    dt_max = dr**2 / (2 * alpha_max)
+    # Generate non-uniform grid over shell region
+    r = generate_nonuniform_grid(r1, r_chrome_out, r2, N_coat, N_steel)
+    N = len(r)
+    
+    # Stability check (using ambient properties; conservative)
+    k_chrome_init, _, cp_chrome_init = thermal_conductivity_chrome(T_outside), None, specific_heat_chrome(T_outside)
+    alpha_chrome = k_chrome_init / (7190.0 * cp_chrome_init)
+    k_steel_init, _, cp_steel_init = thermal_conductivity_steel(T_outside), None, specific_heat_steel(T_outside)
+    alpha_steel = k_steel_init / (7850.0 * cp_steel_init)
+    alpha_max = max(alpha_chrome, alpha_steel)
+    # For non-uniform grid, use smallest Δr
+    dr_min = np.min(np.diff(r))
+    dt_max = dr_min**2 / (2 * alpha_max)
     if dt > dt_max:
         print("Warning: dt is too large for stability. dt_max ≈", dt_max)
 
     num_steps = int(total_time / dt)
-    
-    # Record snapshots at selected times (0, 10, 50, 100, total_time)
-    #snapshot_times = [0, 10, 50, 100, total_time]
-    snapshot_times = np.linspace(0,total_time,100)
-    snapshot_indices = [int(t/dt) for t in snapshot_times]
+    num_snapshots = 50
+    snapshot_times = np.linspace(0, total_time, num_snapshots)
+    snapshot_indices = np.unique(np.array(np.round(snapshot_times/dt), dtype=int))
+
+    # Initial conditions: shell at T_outside; internal air at T_air_initial.
+    T = np.ones(N) * T_outside
+    T_air = T_air_initial
+
     T_record = []
     T_air_record = []
     times_record = []
 
-    # Inner surface area (per unit length)
-    A_inner = 2 * np.pi * r1
-    # Effective mass of node 0 (using half-cell volume for unit length): m_node = rho * A_inner * (dr/2) = rho * π * r1 * dr
-    m_node = rho * np.pi * r1 * dr
+    # Inner boundary: area and control volume for node 0.
+    A_inner = 2 * np.pi * r1  # inner surface area per unit length
+    # For node 0, control volume extends from r = r1 to r_face = (r[0]+r[1])/2.
+    r_face0 = 0.5 * (r[0] + r[1])
+    V0 = np.pi * (r_face0**2 - r1**2)
+    # Use material properties at node 0 (if coating exists, chrome; else steel)
+    k0, rho0, cp0 = get_material_props(T[0], r[0], r_chrome_out, include_coating)
 
+    # Time integration loop (explicit finite volume)
     for n in range(num_steps + 1):
+        current_time = n * dt
+        # Firing events: if current time is within dt/2 of an event, reset T_air.
+        if any(abs(current_time - t_fire) < dt/2 for t_fire in firing_events):
+            T_air = T_fire
+
         if n in snapshot_indices:
             T_record.append(T.copy())
             T_air_record.append(T_air)
-            times_record.append(n * dt)
-            
+            times_record.append(current_time)
+
         T_new = T.copy()
 
-        # --- Update for node 0 (inner wall) with convection and conduction ---
-        # Effective conductivity at inner interface (average of node 0 and 1)
-        k_inner = (thermal_conductivity(T[0]) + thermal_conductivity(T[1])) / 2
-        conduction_term = k_inner * A_inner * (T[1] - T[0]) / dr
-        # Convective heat loss from inner surface
-        h_current = convective_heat_transfer_coefficient(T[0], T_air)
-        convective_term = h_current * A_inner * (T[0] - T_air)
-        dT0_dt = (conduction_term - convective_term) / (m_node * c_p)
-        T_new[0] = T[0] + dt * dT0_dt
+        # --- Node 0 (inner boundary) update ---
+        # Convection flux at inner face (r = r1)
+        h_current = dittus_boelter_h(V, inner_d, T_air + 273.15, mode='cooling')
+        F_conv = h_current * A_inner * (T_air - T[0])
+        # Conduction flux at outer face of control volume (r_face0)
+        # Compute effective conductivity between node 0 and node 1:
+        k1_eff, _, _ = get_material_props(T[1], r[1], r_chrome_out, include_coating)
+        k0_eff, _, _ = get_material_props(T[0], r[0], r_chrome_out, include_coating)
+        k_eff = 0.5 * (k0_eff + k1_eff)
+        F_cond = - k_eff * (T[1] - T[0]) / (r[1] - r[0]) * (2 * np.pi * r_face0)
+        # Energy balance for node 0:
+        T_new[0] = T[0] + dt / (rho0 * cp0 * V0) * (F_conv + F_cond)
 
-        # --- Update for internal nodes (i = 1 to N-2) with variable conductivity ---
+        # --- Internal nodes: i = 1 to N-2 ---
         for i in range(1, N-1):
-            # Compute effective conductivity at interfaces using arithmetic average
-            k_ip = (thermal_conductivity(T[i]) + thermal_conductivity(T[i+1])) / 2
-            k_im = (thermal_conductivity(T[i]) + thermal_conductivity(T[i-1])) / 2
-            # Compute effective radial positions for interfaces
-            r_ip = (r[i] + r[i+1]) / 2
-            r_im = (r[i] + r[i-1]) / 2
-            dT_dr_ip = (T[i+1] - T[i]) / dr
-            dT_dr_im = (T[i] - T[i-1]) / dr
-            dT_dt = (1 / (rho * c_p)) * (1/(r[i]*dr)) * ( r_ip * k_ip * dT_dr_ip - r_im * k_im * dT_dr_im )
-            T_new[i] = T[i] + dt * dT_dt
+            # Determine interface positions
+            r_im = 0.5 * (r[i] + r[i-1])
+            r_ip = 0.5 * (r[i+1] + r[i])
+            V_i = np.pi * (r_ip**2 - r_im**2)
+            # Get material properties at node i
+            k_i, rho_i, cp_i = get_material_props(T[i], r[i], r_chrome_out, include_coating)
+            # For interfaces, use arithmetic average:
+            k_im, _, _ = get_material_props(0.5*(T[i]+T[i-1]), 0.5*(r[i]+r[i-1]), r_chrome_out, include_coating)
+            k_ip, _, _ = get_material_props(0.5*(T[i]+T[i+1]), 0.5*(r[i]+r[i+1]), r_chrome_out, include_coating)
+            F_im = - k_im * (T[i] - T[i-1]) / (r[i] - r[i-1]) * (2 * np.pi * r_im)
+            F_ip = - k_ip * (T[i+1] - T[i]) / (r[i+1] - r[i]) * (2 * np.pi * r_ip)
+            T_new[i] = T[i] + dt / (rho_i * cp_i * V_i) * (F_im - F_ip)
 
-        # Outer wall (node N-1): fixed at ambient temperature
+        # --- Outer boundary (node N-1): Dirichlet condition ---
         T_new[-1] = T_outside
 
-        # --- Update for internal air temperature (lumped system) ---
-        m_air = rho_air * np.pi * r1**2  # mass per unit length of air
-        dT_air_dt = - (convective_heat_transfer_coefficient(T[0], T_air) * A_inner * (T_air - T[0])) / (m_air * c_p_air)
-        T_air = T_air + dt * dT_air_dt
+        # Update internal air temperature (lumped system)
+        m_air = rho_air * np.pi * r1**2
+        dT_air = - (h_current * A_inner * (T_air - T[0])) / (m_air * c_p_air)
+        T_air = T_air + dt * dT_air
 
         T = T_new.copy()
+    
+    return r, np.array(T_record), np.array(times_record), np.array(T_air_record), r1, inner_d, r_chrome_out
 
-    return r, np.array(T_record), np.array(times_record), np.array(T_air_record)
+# -------------------- Simulation Parameters --------------------
+T_outside = 25                # Ambient temperature (°C)
+inner_diameter_mm = 155       # Inner diameter (mm)
+steel_thickness_mm = 77.5     # Steel thickness (mm)
+d_chrome_mm = 0.1             # Chrome coating thickness (mm)
+V = 2.0                       # Internal air flow velocity (m/s)
+rho_air = 1.2                 # Air density (kg/m³)
+c_p_air = 1000                # Air specific heat (J/(kg·K))
+T_air_initial = 2500          # Initial internal air temperature (°C)
+T_fire = 2500               # Temperature immediately after firing (°C)
+total_time = 300              # Total simulation time (s)
+dt = 0.001                  # Time step (s)
+# For non-uniform grid: choose N_coat sufficiently high to resolve 0.1 mm coating
+N_coat = 10                 # e.g., 10 points in coating region
+N_steel = 140               # e.g., 140 points in steel region
 
-# --------------------- Simulation Parameters ---------------------
-T_outside = 25            # Ambient temperature (°C)
-inner_diameter_mm = 155   # Inner wall diameter (mm)
-thickness_mm = 77.5       # Shell thickness (mm)
-rho = 7850                # Density of steel (kg/m³)
-c_p = 450                 # Specific heat capacity of steel (J/(kg·K))
-rho_air = 1.2             # Density of air (kg/m³)
-c_p_air = 1000            # Specific heat capacity of air (J/(kg·K))
-T_air_initial = 3000      # Initial internal air temperature (°C)
-total_time = 15           # Total simulation time (s)
-dt = 0.01                 # Time step (s)
-N = 100                   # Number of radial grid points
+# Firing events (in seconds)
+firing_events = [60, 120, 180]
 
-# Run the simulation
-r, T_record, times, T_air_record = transient_heat_conduction_cylindrical_convective_inner_variable(
-    T_outside, inner_diameter_mm, thickness_mm,
-    rho, c_p, rho_air, c_p_air,
-    T_air_initial,
-    total_time, dt, N
-)
+# -------------------- Run Simulation --------------------
+r_shell, T_record, times, T_air_record, r1_val, inner_d_val, r_chrome_out = \
+    transient_heat_conduction_nonuniform_with_firing(T_outside, inner_diameter_mm, steel_thickness_mm, d_chrome_mm,
+                                                     V, rho_air, c_p_air, T_air_initial,
+                                                     total_time, dt, N_coat, N_steel,
+                                                     firing_events, T_fire, include_coating=True)
 
-# --------------------- Animation of Temperature Distribution ---------------------
-fig, ax = plt.subplots(figsize=(8,6))
-r_mm = r * 1000  # Convert radius from m to mm for plotting
-line, = ax.plot(r_mm, T_record[0], lw=2)
-time_text = ax.text(0.05, 0.90, '', transform=ax.transAxes, fontsize=12)
+# -------------------- Animation: Composite Domain (Air + Shell) --------------------
+def create_animation(r_shell, T_record, T_air_record, times, r1, title):
+    fig, ax = plt.subplots(figsize=(8,6))
+    n_air = 20
+    r_air = np.linspace(0, r1, n_air) * 1000  # in mm
+    r_shell_mm = r_shell * 1000              # in mm
+    T_air_profile = np.full(n_air, T_air_record[0])
+    composite_T = np.concatenate([T_air_profile, T_record[0]])
+    composite_r = np.concatenate([r_air, r_shell_mm])
+    line, = ax.plot(composite_r, composite_T, lw=2)
+    time_text = ax.text(0.05, 0.90, '', transform=ax.transAxes, fontsize=12)
+    ax.set_xlabel('Radius (mm)', fontsize=14)
+    ax.set_ylabel('Temperature (°C)', fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True)
+    ax.set_xlim(0, r_shell_mm[-1])
+    ax.set_ylim(np.min(T_record)-10, np.max(T_record)+10)
+    
+    def update(frame):
+        T_air_profile = np.full(n_air, T_air_record[frame])
+        composite_T = np.concatenate([T_air_profile, T_record[frame]])
+        line.set_ydata(composite_T)
+        time_text.set_text(f'Time = {times[frame]:.3f} s')
+        return line, time_text
 
-ax.set_xlabel('Radius (mm)', fontsize=14)
-ax.set_ylabel('Temperature (°C)', fontsize=14)
-ax.set_title('Transient Temperature Distribution in the Cylinder', fontsize=16)
-ax.grid(True)
-ax.set_xlim(r_mm[0], r_mm[-1])
-ax.set_ylim(np.min(T_record)-10, np.max(T_record)+10)
+    ani = animation.FuncAnimation(fig, update, frames=len(times), interval=50, blit=True)
+    plt.show()
 
-def update(frame):
-    line.set_ydata(T_record[frame])
-    time_text.set_text(f'Time = {times[frame]:.1f} s')
-    return line, time_text
+create_animation(r_shell, T_record, T_air_record, times, r1_val, 'Composite Domain (Air + Shell) with Non-uniform Grid')
 
-ani = animation.FuncAnimation(fig, update, frames=len(times), interval=100, blit=True)
-plt.show()
-
-# --------------------- Plot of Internal Air Temperature Evolution ---------------------
+# -------------------- Plot Internal Air Temperature Evolution --------------------
 fig2, ax2 = plt.subplots(figsize=(8,6))
 ax2.plot(times, T_air_record, 'r-o')
 ax2.set_xlabel('Time (s)', fontsize=14)
@@ -169,3 +274,4 @@ ax2.set_ylabel('Internal Air Temperature (°C)', fontsize=14)
 ax2.set_title('Internal Air Temperature Evolution', fontsize=16)
 ax2.grid(True)
 plt.show()
+
