@@ -97,7 +97,3 @@ Feel free to modify these parameters to match your specific simulation needs.
 ## Acknowledgments
 
 This simulation is intended for educational purposes and demonstrates basic concepts of transient heat conduction in composite materials and the use of numerical methods to solve partial differential equations in cylindrical coordinates.
-
----
-
-이 README 파일을 기반으로 프로젝트에 대한 개요와 사용법을 문서화할 수 있습니다.
