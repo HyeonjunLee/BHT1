@@ -11,5 +11,7 @@
 10               ! N_coat (Number of grid points in coating region)
 140              ! N_steel (Number of grid points in steel region)
 3                ! num_firing (Number of firing events)
-60 120 180       ! Firing event times in s (space separated)
+60
+120
+180       ! Firing event times in s (space separated)
 
