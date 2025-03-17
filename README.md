@@ -1,7 +1,3 @@
-아래는 해당 코드를 설명하는 README 파일의 예시입니다. 필요에 따라 내용을 수정하여 사용하실 수 있습니다.
-
----
-
 # Transient Heat Conduction in a Composite Cylinder with Variable Material Properties
 
 This project simulates the transient heat conduction in a composite cylindrical barrel that consists of a thin chrome coating on the inner wall and a steel substrate. The simulation also incorporates the effect of convective heat transfer at the inner surface with high-temperature internal air, which is modeled using a lumped parameter approach.
