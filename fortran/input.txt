@@ -2,15 +2,15 @@
 0.155            ! inner_diam (Inner diameter in m)
 0.0775           ! steel_thick (Steel thickness in m)
 0.0001           ! d_chrome_val (Chrome coating thickness in m)
-1                ! include_coating (1=True, 0=False)
+0                ! include_coating (1=True, 0=False)
 2.0              ! V (Internal air flow velocity in m/s)
 2500.0           ! T_air_initial (Initial internal air temperature in °C)
 2500.0           ! T_fire (Temperature after firing in °C)
-300.0            ! total_time (Total simulation time in s)
-0.001            ! dt (Time step in s)
-10               ! N_coat (Number of grid points in coating region)
+30.0            ! total_time (Total simulation time in s)
+0.0001            ! dt (Time step in s)
+5               ! N_coat (Number of grid points in coating region)
 140              ! N_steel (Number of grid points in steel region)
 2                ! num_firing (Number of firing events)
-60
-120       ! Firing event times in s (space separated)
+10
+20       ! Firing event times in s (space separated)
 

@@ -56,10 +56,10 @@ program transient_heat_conduction_input
      stop
   end if
 
-  print *, 'Final internal air temperature (°C): ', T_air_record(size(T_air_record))
+  print '(A, F8.2)', 'Final internal air temperature (°C): ', T_air_record(size(T_air_record))
   print *, 'Final temperature profile in shell:'
   do i = 1, size(r)
-     print *, r(i), T_record(size(T_record,1), i)
+     print '(F8.2, F8.2)', r(i), T_record(size(T_record,1), i)
   end do
 
 contains
@@ -213,15 +213,15 @@ contains
       T = T_new
 
       ! Print variables at each step
-      print *, 'Step: ', nstep
-      print *, 'Time: ', time
-      print *, 'T_air: ', T_air
-      print *, 'T: ', T
-      print *, 'T_new: ', T_new
-      print *, 'dT_air: ', dT_air
-      print *, 'F_conv: ', F_conv
-      print *, 'F_cond: ', F_cond
-      print *, 'dTdt: ', dTdt
+      print '(A, I8)', 'Step: ', nstep
+      print '(A, F8.2)', 'Time: ', time
+      print '(A, F8.2)', 'T_air: ', T_air
+      print '(A, F8.2)', 'T: ', T
+      print '(A, F8.2)', 'T_new: ', T_new
+      print '(A, F8.2)', 'dT_air: ', dT_air
+      print '(A, F8.2)', 'F_conv: ', F_conv
+      print '(A, F8.2)', 'F_cond: ', F_cond
+      print '(A, F8.2)', 'dTdt: ', dTdt
 
       ! Check for NaN values in the temperature array
       if (any(isnan(T))) then
