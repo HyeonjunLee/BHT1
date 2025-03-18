@@ -225,7 +225,11 @@ contains
 
       ! Check for NaN values in the temperature array
       if (any(isnan(T))) then
-         print *, 'Error: NaN values detected at time step ', nstep
+         do i = 1, size(T)
+            if (isnan(T(i))) then
+               print *, 'Error: NaN value detected at grid location ', i, ' (r = ', r(i), ') at time step ', nstep
+            end if
+         end do
          stop
       end if
 
