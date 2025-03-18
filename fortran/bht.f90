@@ -44,11 +44,17 @@ program transient_heat_conduction_input
     end do
   close(10)
 
+  ! Open output file
+  open(unit=20, file="output.txt", status="replace", action="write")
+
   ! Call the simulation subroutine (parameters for the shell region are passed in mm)
   call transient_heat_conduction_nonuniform_with_firing( T_outside, inner_diam*1000.0_dp, &
        steel_thick*1000.0_dp, d_chrome_val*1000.0_dp, V, 1.2_dp, 1000.0_dp, T_air_initial, &
        total_time, dt, N_coat, N_steel, firing_events, T_fire, (include_coating == 1), &
-       r, T_record, times, T_air_record, r1, inner_d, r_chrome_out )
+       r, T_record, times, T_air_record, r1, inner_d, r_chrome_out, 20 )
+
+  ! Close output file
+  close(20)
 
   ! Check for NaN values in the results
   if (any(isnan(T_air_record)) .or. any(isnan(T_record))) then
@@ -66,7 +72,7 @@ contains
 
   subroutine transient_heat_conduction_nonuniform_with_firing( T_outside, inner_diameter_mm, steel_thickness_mm, d_chrome_mm, &
          V, rho_air, c_p_air, T_air_initial, total_time, dt, N_coat, N_steel, firing_events, T_fire, &
-         include_coating, r, T_record, times, T_air_record, r1, inner_d, r_chrome_out )
+         include_coating, r, T_record, times, T_air_record, r1, inner_d, r_chrome_out, unit )
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
     ! Input parameters
@@ -76,6 +82,7 @@ contains
     integer, intent(in) :: N_coat, N_steel
     integer, intent(in) :: firing_events(:)
     logical, intent(in) :: include_coating
+    integer, intent(in) :: unit
     ! Output arrays
     real(dp), allocatable, intent(out) :: r(:)
     real(dp), allocatable, intent(out) :: T_record(:,:)  ! (num_snapshots, N)
@@ -212,16 +219,16 @@ contains
 
       T = T_new
 
-      ! Print variables at each step
-      print *, 'Step: ', nstep
-      print *, 'Time: ', time
-      print *, 'T_air: ', T_air
-      print *, 'T: ', T
-      print *, 'T_new: ', T_new
-      print *, 'dT_air: ', dT_air
-      print *, 'F_conv: ', F_conv
-      print *, 'F_cond: ', F_cond
-      print *, 'dTdt: ', dTdt
+      ! Print variables at each step to output file
+      write(unit, *) 'Step: ', nstep
+      write(unit, *) 'Time: ', time
+      write(unit, *) 'T_air: ', T_air
+      write(unit, *) 'T: ', T
+      write(unit, *) 'T_new: ', T_new
+      write(unit, *) 'dT_air: ', dT_air
+      write(unit, *) 'F_conv: ', F_conv
+      write(unit, *) 'F_cond: ', F_cond
+      write(unit, *) 'dTdt: ', dTdt
 
       ! Check for NaN values in the temperature array
       if (any(isnan(T))) then
