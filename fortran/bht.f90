@@ -50,6 +50,12 @@ program transient_heat_conduction_input
        total_time, dt, N_coat, N_steel, firing_events, T_fire, (include_coating == 1), &
        r, T_record, times, T_air_record, r1, inner_d, r_chrome_out )
 
+  ! Check for NaN values in the results
+  if (any(isnan(T_air_record)) .or. any(isnan(T_record))) then
+     print *, 'Error: NaN values detected in the simulation results.'
+     stop
+  end if
+
   print *, 'Final internal air temperature (°C): ', T_air_record(size(T_air_record))
   print *, 'Final temperature profile in shell:'
   do i = 1, size(r)
@@ -205,6 +211,13 @@ contains
       T_air = T_air + dt * dT_air
 
       T = T_new
+
+      ! Check for NaN values in the temperature array
+      if (any(isnan(T))) then
+         print *, 'Error: NaN values detected at time step ', nstep
+         stop
+      end if
+
     end do
 
     allocate(T_record(idx, N))
