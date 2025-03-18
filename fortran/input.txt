@@ -7,9 +7,9 @@
 2500.0           ! T_air_initial (Initial internal air temperature in °C)
 2500.0           ! T_fire (Temperature after firing in °C)
 30.0            ! total_time (Total simulation time in s)
-0.000001            ! dt (Time step in s)
-5               ! N_coat (Number of grid points in coating region)
-140              ! N_steel (Number of grid points in steel region)
+0.000002            ! dt (Time step in s)
+10               ! N_coat (Number of grid points in coating region)
+20              ! N_steel (Number of grid points in steel region)
 2                ! num_firing (Number of firing events)
 10
 20       ! Firing event times in s (space separated)
