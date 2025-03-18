@@ -212,6 +212,17 @@ contains
 
       T = T_new
 
+      ! Print variables at each step
+      print *, 'Step: ', nstep
+      print *, 'Time: ', time
+      print *, 'T_air: ', T_air
+      print *, 'T: ', T
+      print *, 'T_new: ', T_new
+      print *, 'dT_air: ', dT_air
+      print *, 'F_conv: ', F_conv
+      print *, 'F_cond: ', F_cond
+      print *, 'dTdt: ', dTdt
+
       ! Check for NaN values in the temperature array
       if (any(isnan(T))) then
          print *, 'Error: NaN values detected at time step ', nstep
