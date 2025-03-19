@@ -36,9 +36,13 @@ program heat_transfer_cylinder
         ! Update temperature distribution
         do i = 2, n_r-1
             if (r(i) <= r_chrome) then
-                T_new(i) = T(i) + dt * k_chrome * ( (T(i+1) - T(i)) / (r(i+1) - r(i)) - (T(i) - T(i-1)) / (r(i) - r(i-1)) ) / (r(i) * dr)
+                T_new(i) = T(i) + dt * k_chrome * ( &
+                    (T(i+1) - T(i)) / (r(i+1) - r(i)) - &
+                    (T(i) - T(i-1)) / (r(i) - r(i-1)) ) / (r(i) * dr)
             else
-                T_new(i) = T(i) + dt * k_steel * ( (T(i+1) - T(i)) / (r(i+1) - r(i)) - (T(i) - T(i-1)) / (r(i) - r(i-1)) ) / (r(i) * dr)
+                T_new(i) = T(i) + dt * k_steel * ( &
+                    (T(i+1) - T(i)) / (r(i+1) - r(i)) - &
+                    (T(i) - T(i-1)) / (r(i) - r(i-1)) ) / (r(i) * dr)
             end if
         end do
 
