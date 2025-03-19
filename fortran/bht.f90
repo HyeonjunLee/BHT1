@@ -1,4 +1,5 @@
 program barrel_heat_transfer
+    use hdf5
     implicit none
 
     ! 물리 상수 및 초기 조건
@@ -28,9 +29,21 @@ program barrel_heat_transfer
     integer, parameter :: n_nodes = int((barrel_thickness + coating_thickness) / dx) + 1
     real(8) :: temp(n_nodes), temp_new(n_nodes)
     real(8) :: r(n_nodes)
-    integer :: i, step
+    integer :: i
     real(8) :: time
     real(8) :: start_time, end_time
+
+    ! HDF5 관련 변수
+    integer(HID_T) :: hdf5_file, hdf5_space, hdf5_dataset
+    integer :: hdf5_status
+    integer(8) :: dims(1)
+
+    ! 파일 존재 여부 확인 및 삭제
+    logical :: file_exists  ! Declare as logical
+    inquire(file="temperature_distribution.h5", exist=file_exists)
+    if (file_exists) then
+        call execute_command_line("rm -f temperature_distribution.h5")
+    end if
 
     ! 초기화
     do i = 1, n_nodes
@@ -40,7 +53,13 @@ program barrel_heat_transfer
         else
             temp(i) = ambient_temp
         end if
+        print *, "r(", i, ") = ", r(i), ", temp(", i, ") = ", temp(i)
     end do
+
+    if (any(r < 0.0)) then
+        print *, "Error: Negative radius values detected."
+        stop
+    end if
 
     ! 시작 시간 기록
     call cpu_time(start_time)
@@ -73,14 +92,55 @@ program barrel_heat_transfer
     ! 종료 시간 기록
     call cpu_time(end_time)
 
-    ! 결과 출력
-    open(unit=10, file="temperature_distribution.txt", status="unknown")
-    do i = 1, n_nodes
-        write(10, *) r(i), temp(i)
-    end do
-    close(10)
+    ! HDF5 파일 생성
+    call h5fcreate_f("temperature_distribution.h5", H5F_ACC_TRUNC_F, hdf5_file, hdf5_status)
+    if (hdf5_status /= 0) then
+        print *, "Error creating HDF5 file."
+        stop
+    end if
 
-    print *, "Simulation complete. Results have been saved to temperature_distribution.txt."
+    ! 데이터 공간 생성
+    dims(1) = n_nodes
+    call h5screate_simple_f(1, dims, hdf5_space, hdf5_status)
+    if (hdf5_status /= 0) then
+        print *, "Error creating HDF5 dataspace."
+        stop
+    end if
+
+    ! 데이터셋 생성 및 쓰기
+    call h5dcreate_f(hdf5_file, "radius", H5T_NATIVE_DOUBLE, hdf5_space, hdf5_dataset, hdf5_status)
+    if (hdf5_status /= 0) then
+        print *, "Error creating dataset 'radius'."
+        stop
+    end if
+
+    call h5dwrite_f(hdf5_dataset, H5T_NATIVE_DOUBLE, r, dims, hdf5_status)
+    if (hdf5_status /= 0) then
+        print *, "Error writing dataset 'radius'."
+        stop
+    end if
+
+    call h5dclose_f(hdf5_dataset, hdf5_status)
+
+    call h5dcreate_f(hdf5_file, "temperature", H5T_NATIVE_DOUBLE, hdf5_space, hdf5_dataset, hdf5_status)
+    if (hdf5_status /= 0) then
+        print *, "Error creating dataset 'temperature'."
+        stop
+    end if
+
+    call h5dwrite_f(hdf5_dataset, H5T_NATIVE_DOUBLE, temp, dims, hdf5_status)
+    if (hdf5_status /= 0) then
+        print *, "Error writing dataset 'temperature'."
+        stop
+    end if
+
+    call h5dclose_f(hdf5_dataset, hdf5_status)
+
+    ! 데이터 공간 및 파일 닫기
+    call h5sclose_f(hdf5_space, hdf5_status)
+    call h5fclose_f(hdf5_file, hdf5_status)
+
+    print *, "Simulation complete. Results have been saved to temperature_distribution.h5."
     print *, "Simulation runtime: ", end_time - start_time, " seconds."
 
 end program barrel_heat_transfer
