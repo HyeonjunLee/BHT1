@@ -2,100 +2,85 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # 물리 상수
-k_chrome = 93  # 크롬의 열전도율 (W/m·K)
-k_steel = 50   # 철의 열전도율 (W/m·K)
-h_inner = 1000  # 내부 공기와의 대류 열전달 계수 (W/m²·K)
-h_outer = 25    # 외부 공기와의 대류 열전달 계수 (W/m²·K)
-T_inner_air_initial = 2500  # Initial internal air temperature (°C)
-T_inner_air_final = 1000    # Final internal air temperature (°C)
-T_inner_air = lambda t: T_inner_air_initial + (T_inner_air_final - T_inner_air_initial) * (t * dt / (time_steps * dt))
-T_outer_air = 25    # 외부 공기 온도 (°C)
+k_steel = 50.2  # 철의 열전도율 (W/m·K)
+rho_steel = 7850  # 철의 밀도 (kg/m^3)
+cp_steel = 470  # 철의 비열 (J/kg·K)
+h_air = 100  # 공기와 철 사이의 대류 열전달 계수 (W/m^2·K)
+T_air_initial = 2500  # 초기 공기 온도 (K)
+T_ambient = 300  # 외부 상온 (K)
 
-# 포신 치수
-r_inner = 155 / 2 / 1000  # 포신 내부 반지름 (m)
-r_chrome = r_inner + 0.1 / 1000  # 크롬 코팅층 외부 반지름 (m)
-r_outer = r_inner + 77.5 / 1000  # 포신 외부 반지름 (m)
+# 포신의 기하학적 특성
+inner_radius = 0.155 / 2  # 내부 반지름 (m)
+thickness = 0.0775  # 두께 (m)
+outer_radius = inner_radius + thickness  # 외부 반지름 (m)
 
-# 계산 설정
-dr = 0.0001 # 반지름 방향의 간격 (m)
-dt = 0.01    # 시간 간격 (s)
-time_steps = 2000  # 시간 스텝 수
-r = np.arange(r_inner, r_outer + dr, dr)  # 반지름 배열
-T = np.ones_like(r) * T_outer_air  # 초기 온도 배열 (외부 공기 온도로 초기화)
+# 시뮬레이션 설정
+dr = 0.001  # 반지름 방향의 공간 간격 (m)
+dt = 0.01  # 시간 간격 (s)
+total_time = 50  # 총 시뮬레이션 시간 (s)
 
-# 반지름에 따른 열전도율 설정
-k = np.where(r <= r_chrome, k_chrome, k_steel)
+# 격자 생성
+r = np.arange(inner_radius, outer_radius + dr, dr)
+n = len(r)
+time_steps = int(total_time / dt)
 
-# Stability criteria check and automatic adjustment
-Fo = np.max(k) * dt / (dr**2)  # Fourier number
-if Fo > 0.25:  # Reduce threshold for stability
-    dt = 0.25 * (dr**2) / np.max(k)  # Adjust dt to satisfy stability
-    print(f"Adjusted time step dt to {dt:.6f} for stability (Fo={Fo:.2f}).")
+# 초기 온도 설정
+T = np.full(n, T_ambient)
+T[0] = T_air_initial  # 내부 공기 온도
 
-# Initialize time array for plotting
-time_array = np.arange(0, time_steps * dt, dt)
-T_inner_air_values = []
+# 결과 저장
+temperature_history = []
 
-# 내부 공기 물리 상수
-c_air = 1005  # 공기의 비열 (J/kg·K)
-rho_air = 1.225  # 공기의 밀도 (kg/m³)
-V_inner = np.pi * r_inner**2 * 1.0  # 내부 공기의 부피 (m³), 길이를 1m로 가정
-m_air = rho_air * V_inner  # 내부 공기의 질량 (kg)
-A_inner = 2 * np.pi * r_inner * 1.0  # 내부 표면적 (m²), 길이를 1m로 가정
-
-# 내부 공기 온도 초기화
-T_inner_air = T_inner_air_initial
+# 내부 공기 온도 기록
+internal_air_temperature = []
 
 # 시간 루프
-for t_step in range(time_steps):
+for t in range(time_steps):
     T_new = T.copy()
-    T_surface = T[0]  # 포신 내부 표면 온도
-    dT_inner_air_dt = -(h_inner * A_inner / (m_air * c_air)) * (T_inner_air - T_surface)
-    T_inner_air += dT_inner_air_dt * dt  # 내부 공기 온도 업데이트
-    T_inner_air_values.append(T_inner_air)  # 내부 공기 온도 저장
-
-    for i in range(1, len(r) - 1):
-        dT_dr = (T[i+1] - T[i-1]) / (2 * dr)
-        d2T_dr2 = (T[i+1] - 2 * T[i] + T[i-1]) / (dr**2)
-        # Correct radial term to avoid instability
-        radial_term = (1 / r[i]) * (T[i+1] - T[i]) / dr if r[i] > 1e-6 else 0
-        T_new[i] = T[i] + dt * (k[i] * (d2T_dr2 + radial_term))
-
-    # Clamp temperature values to avoid overflow
-    T_new = np.clip(T_new, T_outer_air, T_inner_air_initial)
-
-    # 내부 경계 조건 (대류)
-    T_new[0] = T[0] + dt * h_inner * (T_inner_air - T[0]) / (k[0] / dr)
-
-    # 외부 경계 조건 (대류)
-    T_new[-1] = T[-1] + dt * h_outer * (T_outer_air - T[-1]) / (k[-1] / dr)
-
-    # Update temperature array
-    T = T_new
+    
+    # 내부 공기와 철 사이의 대류 열전달
+    T_new[0] = T[0] - h_air * (T[0] - T[1]) * dt / (rho_steel * cp_steel * dr)
+    
+    # 철 내부의 열전달 (유한 차분법)
+    for i in range(1, n - 1):
+        d2T_dr2 = (T[i + 1] - 2 * T[i] + T[i - 1]) / dr**2
+        dT_dr = (T[i + 1] - T[i - 1]) / (2 * dr)
+        T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * (d2T_dr2 + dT_dr / r[i])
+    
+    # 외부 표면에서의 열전달 (대류)
+    T_new[-1] = T[-1] + dt * h_air * (T_ambient - T[-1]) / (rho_steel * cp_steel * dr)
+    
+    # 온도 업데이트
+    T = T_new.copy()
+    temperature_history.append(T.copy())
+    
+    # 내부 공기 온도 기록
+    internal_air_temperature.append(T[0])
 
 # 결과 시각화
-plt.figure(figsize=(10, 5))
+temperature_history = np.array(temperature_history)
+time = np.linspace(0, total_time, time_steps)
 
-# Plot temperature distribution
+plt.figure(figsize=(12, 6))
+
+# 첫 번째 그래프: 반지름에 따른 온도 분포
 plt.subplot(1, 2, 1)
-plt.plot(r * 1000, T, label="Temperature Distribution")
-plt.xlabel("Radius (mm)")
-plt.ylabel("Temperature (°C)")
-plt.title("1D Heat Transfer in Gun Barrel")
+for i in range(0, len(temperature_history), time_steps // 10):
+    plt.plot(r * 1000, temperature_history[i], label=f'Time = {i * dt:.2f}s')  # 반지름을 mm로 변환
+plt.xlabel('Radius (mm)')
+plt.ylabel('Temperature (K)')
+plt.title('Temperature Distribution in Gun Barrel')
 plt.legend()
 plt.grid()
 
-# Plot internal air temperature over time
+# 두 번째 그래프: 시간에 따른 내부 공기 온도 변화
 plt.subplot(1, 2, 2)
-plt.plot(time_array, T_inner_air_values, label="Internal Air Temperature", color="red")
-plt.xlabel("Time (s)")
-plt.ylabel("Temperature (°C)")
-plt.title("Internal Air Temperature Over Time")
+plt.plot(time, internal_air_temperature, color='red', label='Internal Air Temperature')
+plt.xlabel('Time (s)')
+plt.ylabel('Temperature (K)')
+plt.title('Internal Air Temperature Over Time')
 plt.legend()
 plt.grid()
 
-# Save the plots
 plt.tight_layout()
-plt.switch_backend('Agg')  # Use a non-interactive backend
-plt.savefig('/home/hyeonjun/BHT/python/temperature_distribution.png')  # Save the plot as an image
-print("Plot saved as 'temperature_distribution.png'.")
+plt.show()
