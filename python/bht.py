@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 # 물리 상수
 k_steel = 50.2  # 철의 열전도율 (W/m·K)
@@ -83,4 +84,32 @@ plt.legend()
 plt.grid()
 
 plt.tight_layout()
+plt.show()
+
+# 결과 시각화를 위한 애니메이션 생성
+fig, ax = plt.subplots(figsize=(8, 6))
+line, = ax.plot([], [], lw=2)
+ax.set_xlim(r[0] * 1000, r[-1] * 1000)  # 반지름을 mm로 변환
+ax.set_ylim(T_ambient - 50, T_air_initial + 50)  # 온도 범위 설정
+ax.set_xlabel('Radius (mm)')
+ax.set_ylabel('Temperature (K)')
+ax.set_title('Temperature Distribution in Gun Barrel (Animation)')
+ax.grid()
+
+# 초기화 함수
+def init():
+    line.set_data([], [])
+    return line,
+
+# 업데이트 함수
+def update(frame):
+    line.set_data(r * 1000, temperature_history[frame])  # 반지름을 mm로 변환
+    current_time = frame * dt  # 현재 시간 계산
+    ax.set_title(f'Temperature Distribution at Time = {current_time:.2f} s')  # 제목에 시간 표시
+    return line,
+
+# 애니메이션 생성
+ani = FuncAnimation(fig, update, frames=len(temperature_history), init_func=init, blit=True)
+
+# 애니메이션 저장 또는 표시
 plt.show()
