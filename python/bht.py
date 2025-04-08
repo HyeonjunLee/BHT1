@@ -6,6 +6,7 @@ from matplotlib.animation import FuncAnimation
 inner_radius = 0.155 / 2  # 내부 반지름 (m)
 thickness = 0.0775  # 두께 (m)
 outer_radius = inner_radius + thickness  # 외부 반지름 (m)
+barrel_length = 8.092  # 포신의 길이 (m)
 
 # 물리 상수
 k_steel = 50.2  # 철의 열전도율 (W/m·K)
@@ -14,14 +15,24 @@ cp_steel = 470  # 철의 비열 (J/kg·K)
 T_air_initial = 2500  # 초기 공기 온도 (K)
 T_ambient = 300  # 외부 상온 (K)
 
+# 공기의 물성치
+k_air = 0.0257  # 공기의 열전도율 (W/m·K)
+dynamic_viscosity = 1.81e-5  # 공기의 동점성 계수 (Pa·s)
+Pr = 0.71  # Prandtl 수 (공기)
+
+# 특성 길이와 초기 속도
+characteristic_length = inner_radius  # 특성 길이 (m)
+initial_velocity = 300  # 초기 공기 속도 (m/s)
+
 # 내부 공기 물리 상수
 c_air = 1005  # 공기의 비열 (J/kg·K)
 rho_air = 1.225  # 공기의 밀도 (kg/m³)
-V_inner = np.pi * inner_radius**2 * 1.0  # 내부 공기의 부피 (m³), 길이를 1m로 가정
+V_inner = np.pi * inner_radius**2 * barrel_length  # 내부 공기의 부피 (m³)
+A_inner = 2 * np.pi * inner_radius * barrel_length  # 내부 표면적 (m²)
 m_air = rho_air * V_inner  # 초기 내부 공기의 질량 (kg)
 
 # 시뮬레이션 설정
-dr = 0.001  # 반지름 방향의 공간 간격 (m)
+dr = 0.01  # 반지름 방향의 공간 간격 (m)
 dt = 0.01  # 시간 간격 (s)
 total_time = 50  # 총 시뮬레이션 시간 (s)
 
@@ -43,9 +54,22 @@ internal_air_temperature = []
 # 대류 열전달 계수의 시간 의존성
 def h_air_dynamic(t):
     if t < 0.1:  # 포탄 발사 직후
-        return 500  # 높은 대류 열전달 계수 (W/m²·K)
+        velocity = initial_velocity * (1 - t / 0.1)  # 속도가 선형적으로 감소
     else:
-        return 100  # 정상 상태로 감소
+        velocity = 0  # 발사 후 공기 흐름이 멈춤
+
+    # Reynolds 수 계산
+    Re = (rho_air * velocity * characteristic_length) / dynamic_viscosity
+
+    # Nusselt 수 계산 (난류 조건 가정)
+    if Re > 4000:  # 난류 조건
+        Nu = 0.023 * Re**0.8 * Pr**0.3
+    else:  # 층류 조건
+        Nu = 3.66  # 단순한 층류 조건의 Nusselt 수
+
+    # 대류 열전달 계수 계산
+    h_air = (Nu * k_air) / characteristic_length
+    return h_air
 
 # 시간 루프
 for t_step in range(time_steps):
@@ -119,6 +143,7 @@ ax.grid()
 # 초기화 함수
 def init():
     line.set_data([], [])
+    ax.set_title('Temperature Distribution in Gun Barrel (Animation)')  # 초기 제목 설정
     return line,
 
 # 업데이트 함수
@@ -129,7 +154,9 @@ def update(frame):
     return line,
 
 # 애니메이션 생성
-ani = FuncAnimation(fig, update, frames=len(temperature_history), init_func=init, blit=True)
+frames = len(temperature_history)  # 총 프레임 수
+interval = 5000 / frames  # 각 프레임 간의 시간 간격 (ms) - 총 재생 시간 5초로 설정
+ani = FuncAnimation(fig, update, frames=frames, init_func=init, interval=interval, blit=False)
 
 # 애니메이션 저장 또는 표시
 plt.show()
