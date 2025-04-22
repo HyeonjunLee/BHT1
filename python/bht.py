@@ -87,6 +87,16 @@ def h_air_dynamic(t):
     h_air = (Nu * k_air) / characteristic_length
     return h_air
 
+# 외부 대류 열전달 계수의 시간 의존성
+def h_outer_dynamic(t):
+    # 외부 대류 열전달 계수의 시간 의존성을 정의합니다.
+    # 여기서는 단순히 상수 값을 반환하도록 설정합니다.
+    return 10  # W/m²·K
+
+# 상수 정의
+ε = 0.7  # 철의 방사율
+σ = 5.67e-8  # 스테판-볼츠만 상수 (W/m²·K⁴)
+
 # 시간 루프
 for t_step in range(time_steps):
     T_new = T.copy()
@@ -94,6 +104,7 @@ for t_step in range(time_steps):
 
     # 동적으로 변화하는 대류 열전달 계수
     h_air = h_air_dynamic(current_time)
+    h_outer = h_outer_dynamic(current_time)
 
     # 내부 공기와 철 사이의 대류 열전달
     velocity = initial_velocity * max(0, 1 - current_time / 0.1)  # 속도 감소 모델
@@ -107,8 +118,12 @@ for t_step in range(time_steps):
         dT_dr = (-T[i - 3] + 9 * T[i - 2] - 45 * T[i - 1] + 45 * T[i + 1] - 9 * T[i + 2] + T[i + 3]) / (60 * dr)
         T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * (d2T_dr2 + dT_dr / r[i])
 
-    # 경계 조건 처리
-    T_new[-1] = T[-1] + dt * h_air * (T_ambient - T[-1]) / (rho_steel * cp_steel * dr)
+    # 외부 표면에서의 열전달 (대류 + 복사)
+    q_radiation = ε * σ * (T[-1]**4 - T_ambient**4)  # 복사 열전달
+    T_new[-1] = T[-1] + dt * (
+        h_outer * (T_ambient - T[-1]) / (rho_steel * cp_steel * dr) +
+        q_radiation / (rho_steel * cp_steel * dr)
+    )
 
     # 온도 업데이트
     T = T_new.copy()
