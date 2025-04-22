@@ -82,10 +82,10 @@ for t_step in range(time_steps):
     # 내부 공기와 철 사이의 대류 열전달
     T_new[0] = T[0] - h_air * (T[0] - T[1]) * dt / (m_air * c_air)
 
-    # 철 내부의 열전달 (4차 중심 차분법)
-    for i in range(2, n - 2):  # 경계에서 2칸 떨어진 내부 격자만 계산 가능
-        d2T_dr2 = (-T[i + 2] + 16 * T[i + 1] - 30 * T[i] + 16 * T[i - 1] - T[i - 2]) / (12 * dr**2)
-        dT_dr = (T[i - 2] - 8 * T[i - 1] + 8 * T[i + 1] - T[i + 2]) / (12 * dr)
+    # 철 내부의 열전달 (6차 중심 차분법)
+    for i in range(3, n - 3):  # 경계에서 3칸 떨어진 내부 격자만 계산 가능
+        d2T_dr2 = (2 * T[i - 3] - 27 * T[i - 2] + 270 * T[i - 1] - 490 * T[i] + 270 * T[i + 1] - 27 * T[i + 2] + 2 * T[i + 3]) / (180 * dr**2)
+        dT_dr = (-T[i - 3] + 9 * T[i - 2] - 45 * T[i - 1] + 45 * T[i + 1] - 9 * T[i + 2] + T[i + 3]) / (60 * dr)
         T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * (d2T_dr2 + dT_dr / r[i])
 
     # 경계 조건 처리 (2차 중심 차분법 유지)
