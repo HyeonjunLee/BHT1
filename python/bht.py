@@ -96,27 +96,23 @@ for t_step in range(time_steps):
     h_air = h_air_dynamic(current_time)
 
     # 내부 공기와 철 사이의 대류 열전달
+    velocity = initial_velocity * max(0, 1 - current_time / 0.1)  # 속도 감소 모델
+    mass_flow_rate = rho_air * A_inner * velocity  # 질량 흐름률 (kg/s)
+    m_air -= mass_flow_rate * dt  # 시간에 따른 질량 감소
     T_new[0] = T[0] - h_air * (T[0] - T[1]) * dt / (m_air * c_air)
 
     # 철 내부의 열전달 (6차 중심 차분법)
-    for i in range(3, n - 3):  # 경계에서 3칸 떨어진 내부 격자만 계산 가능
+    for i in range(3, n - 3):
         d2T_dr2 = (2 * T[i - 3] - 27 * T[i - 2] + 270 * T[i - 1] - 490 * T[i] + 270 * T[i + 1] - 27 * T[i + 2] + 2 * T[i + 3]) / (180 * dr**2)
         dT_dr = (-T[i - 3] + 9 * T[i - 2] - 45 * T[i - 1] + 45 * T[i + 1] - 9 * T[i + 2] + T[i + 3]) / (60 * dr)
         T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * (d2T_dr2 + dT_dr / r[i])
 
-    # 경계 조건 처리 (2차 중심 차분법 유지)
-    T_new[0] = T[0] - h_air * (T[0] - T[1]) * dt / (m_air * c_air)
+    # 경계 조건 처리
     T_new[-1] = T[-1] + dt * h_air * (T_ambient - T[-1]) / (rho_steel * cp_steel * dr)
-
-    # 내부 공기의 질량 감소 (포탄 발사로 인한 공기 배출)
-    if current_time < 0.1:  # 포탄 발사 직후
-        m_air *= 0.99  # 질량 감소율 (예: 1% 감소)
 
     # 온도 업데이트
     T = T_new.copy()
     temperature_history.append(T.copy())
-
-    # 내부 공기 온도 기록
     internal_air_temperature.append(T[0])
 
 # 결과 시각화
