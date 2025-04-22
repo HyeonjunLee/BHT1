@@ -32,9 +32,25 @@ A_inner = 2 * np.pi * inner_radius * barrel_length  # 내부 표면적 (m²)
 m_air = rho_air * V_inner  # 초기 내부 공기의 질량 (kg)
 
 # 시뮬레이션 설정
-dr = 0.01  # 반지름 방향의 공간 간격 (m)
-dt = 0.01  # 시간 간격 (s)
+dr = 0.005  # 반지름 방향의 공간 간격 (m)
+dt = 0.005  # 시간 간격 (s)
 total_time = 50  # 총 시뮬레이션 시간 (s)
+
+# 열확산율 계산
+alpha = k_steel / (rho_steel * cp_steel)  # 철의 열확산율 (m²/s)
+
+# Fourier 안정성 조건에 따른 최대 시간 간격 계산
+dt_max = 0.5 * dr**2 / alpha
+
+print(f"Fourier 안정성 조건에 따른 최대 시간 간격: dt_max = {dt_max:.6e} s")
+
+# 현재 설정된 시간 간격과 비교
+if dt <= dt_max:
+    print("현재 시간 간격(dt)은 안정성 조건을 만족합니다.")
+else:
+    print("현재 시간 간격(dt)은 안정성 조건을 만족하지 않습니다. dt를 줄이세요.")
+
+dt = min(dt, dt_max)  # 안정성 조건을 만족하도록 dt 조정
 
 # 격자 생성
 r = np.arange(inner_radius, outer_radius + dr, dr)
