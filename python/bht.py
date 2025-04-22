@@ -32,8 +32,8 @@ A_inner = 2 * np.pi * inner_radius * barrel_length  # 내부 표면적 (m²)
 m_air = rho_air * V_inner  # 초기 내부 공기의 질량 (kg)
 
 # 시뮬레이션 설정
-dr = 0.005  # 반지름 방향의 공간 간격 (m)
-dt = 0.005  # 시간 간격 (s)
+dr = 0.01  # 반지름 방향의 공간 간격 (m)
+dt = 0.01  # 시간 간격 (s)
 total_time = 50  # 총 시뮬레이션 시간 (s)
 
 # 열확산율 계산
@@ -70,7 +70,7 @@ internal_air_temperature = []
 # 대류 열전달 계수의 시간 의존성
 def h_air_dynamic(t):
     if t < 0.1:  # 포탄 발사 직후
-        velocity = initial_velocity * (1 - t / 0.1)  # 속도가 선형적으로 감소
+        velocity = initial_velocity * np.exp(-t / 0.05)  # 지수적 감소
     else:
         velocity = 0  # 발사 후 공기 흐름이 멈춤
 
@@ -81,7 +81,7 @@ def h_air_dynamic(t):
     if Re > 4000:  # 난류 조건
         Nu = 0.023 * Re**0.8 * Pr**0.3
     else:  # 층류 조건
-        Nu = 3.66  # 단순한 층류 조건의 Nusselt 수
+        Nu = 3.66  # 층류 조건의 Nusselt 수
 
     # 대류 열전달 계수 계산
     h_air = (Nu * k_air) / characteristic_length
