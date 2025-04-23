@@ -106,21 +106,26 @@ for t_step in range(time_steps):
     h_air = h_air_dynamic(current_time)
     h_outer = h_outer_dynamic(current_time)
 
-    # 디버깅: 주요 변수 출력
-    print(f"Time: {current_time:.2f}s, h_air: {h_air:.2f}, h_outer: {h_outer:.2f}, m_air: {m_air:.6f}")
-
     # 내부 공기와 철 사이의 대류 열전달
     velocity = initial_velocity * max(0, 1 - current_time / 0.1)  # 속도 감소 모델
     mass_flow_rate = rho_air * A_inner * velocity  # 질량 흐름률 (kg/s)
     m_air -= mass_flow_rate * dt  # 시간에 따른 질량 감소
-    m_air = max(m_air, 1e-6)  # 최소값 설정
-    T_new[0] = T[0] - h_air * (T[0] - T[1]) * dt / (m_air * c_air)
+    m_air = max(m_air, 1e-3)  # 최소값 설정
+
+    if m_air > 1e-3:
+        T_new[0] = T[0] - h_air * (T[0] - T[1]) * dt / (m_air * c_air)
+    else:
+        T_new[0] = T[0]  # m_air가 너무 작으면 온도 변화 없음
 
     # 철 내부의 열전달 (6차 중심 차분법)
     for i in range(3, n - 3):
         d2T_dr2 = (2 * T[i - 3] - 27 * T[i - 2] + 270 * T[i - 1] - 490 * T[i] + 270 * T[i + 1] - 27 * T[i + 2] + 2 * T[i + 3]) / (180 * dr**2)
         dT_dr = (-T[i - 3] + 9 * T[i - 2] - 45 * T[i - 1] + 45 * T[i + 1] - 9 * T[i + 2] + T[i + 3]) / (60 * dr)
-        T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * (d2T_dr2 + dT_dr / r[i])
+
+        if r[i] > 1e-6:
+            T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * (d2T_dr2 + dT_dr / r[i])
+        else:
+            T_new[i] = T[i] + dt * (k_steel / (rho_steel * cp_steel)) * d2T_dr2
 
     # 외부 표면에서의 열전달 (대류 + 복사)
     q_radiation = ε * σ * (T[-1]**4 - T_ambient**4)  # 복사 열전달
@@ -129,8 +134,8 @@ for t_step in range(time_steps):
         q_radiation / (rho_steel * cp_steel * dr)
     )
 
-    # 디버깅: 온도 배열 출력
-    print(f"T_new: {T_new}")
+    # 디버깅: 주요 변수 출력
+    print(f"Time: {current_time:.2f}s, T_new[0]: {T_new[0]}, m_air: {m_air}, h_air: {h_air}")
 
     # 온도 업데이트
     T = T_new.copy()
