@@ -34,7 +34,7 @@ m_air = rho_air * V_inner  # 초기 내부 공기의 질량 (kg)
 # 시뮬레이션 설정
 dr = 0.01  # 반지름 방향의 공간 간격 (m)
 dt = 0.01  # 시간 간격 (s)
-total_time = 50  # 총 시뮬레이션 시간 (s)
+total_time = 5  # 총 시뮬레이션 시간 (s)
 
 # 열확산율 계산
 alpha = k_steel / (rho_steel * cp_steel)  # 철의 열확산율 (m²/s)
